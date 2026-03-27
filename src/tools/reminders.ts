@@ -46,7 +46,7 @@ export function registerReminderTools(server: McpServer) {
       description: "List reminders in a list",
       inputSchema: z.object({
         list: z.string().describe("Reminder list name"),
-        show_completed: z.coerce.boolean().default(false).describe("Include completed reminders"),
+        show_completed: z.preprocess((v) => v === true || v === "true", z.boolean()).default(false).describe("Include completed reminders"),
       }),
     },
     withErrorHandling(async ({ list, show_completed }) => {
@@ -120,7 +120,7 @@ end tell`);
       inputSchema: z.object({
         query: z.string().min(1).describe("Search keyword"),
         list: z.string().optional().describe("Limit search to this list (omit for all)"),
-        show_completed: z.coerce.boolean().default(false).describe("Include completed reminders"),
+        show_completed: z.preprocess((v) => v === true || v === "true", z.boolean()).default(false).describe("Include completed reminders"),
       }),
     },
     withErrorHandling(async ({ query, list, show_completed }) => {
@@ -245,7 +245,7 @@ end tell`);
       description: "Mark a reminder as complete or incomplete",
       inputSchema: z.object({
         id: z.string().describe("Reminder ID"),
-        completed: z.coerce.boolean().default(true).describe("true to complete, false to uncomplete"),
+        completed: z.preprocess((v) => v === true || v === "true", z.boolean()).default(true).describe("true to complete, false to uncomplete"),
       }),
     },
     withErrorHandling(async ({ id, completed }) => {
