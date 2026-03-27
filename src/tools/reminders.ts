@@ -16,13 +16,16 @@ function asDateVar(varName: string, iso: string): string {
   set time of ${varName} to ${h * 3600 + m * 60 + s}`;
 }
 
+const RS = "\u001e"; // ASCII 30 Record Separator — safe delimiter unlikely to appear in reminder content
+
 function parseReminders(raw: string) {
   if (!raw) return [];
   return raw
-    .split("\n")
+    .split(RS)
     .filter(Boolean)
     .map((line) => {
       const [id, name, list, completed, dueDate, body] = line.split("\t");
+      if (!id?.startsWith("x-apple-reminder://")) return null;
       return {
         id,
         name,
@@ -31,7 +34,8 @@ function parseReminders(raw: string) {
         dueDate: dueDate || null,
         notes: body || null,
       };
-    });
+    })
+    .filter(Boolean);
 }
 
 export function registerReminderTools(server: McpServer) {
@@ -61,7 +65,7 @@ tell application "Reminders"
     try
       if body of r is not missing value then set nt to (body of r)
     end try
-    set output to output & (id of r) & "\\t" & (name of r) & "\\t" & "${esc}" & "\\t" & (completed of r) & "\\t" & bd & "\\t" & nt & "\\n"
+    set output to output & (id of r) & "\\t" & (name of r) & "\\t" & "${esc}" & "\\t" & (completed of r) & "\\t" & bd & "\\t" & nt & (ASCII character 30)
   end repeat
   return output
 end tell`);
@@ -94,9 +98,17 @@ tell application "Reminders"
   end try
   return (id of r) & "\\t" & (name of r) & "\\t" & (name of lst) & "\\t" & (completed of r) & "\\t" & bd & "\\t" & nt
 end tell`);
-      const items = parseReminders(raw);
-      if (!items.length) return error("Reminder not found");
-      return success(items[0]);
+      // reminders_get returns a single line; split into at most 6 parts so notes with tabs are preserved
+      const parts = raw.split("\t");
+      const [rid, rname, rlist, rcompleted, rdueDate, ...rest] = parts;
+      return success({
+        id: rid,
+        name: rname,
+        list: rlist,
+        completed: rcompleted === "true",
+        dueDate: rdueDate || null,
+        notes: rest.join("\t") || null,
+      });
     }),
   );
 
@@ -130,7 +142,7 @@ tell application "Reminders"
     try
       if body of r is not missing value then set nt to (body of r)
     end try
-    set output to output & (id of r) & "\\t" & (name of r) & "\\t" & "${escList}" & "\\t" & (completed of r) & "\\t" & bd & "\\t" & nt & "\\n"
+    set output to output & (id of r) & "\\t" & (name of r) & "\\t" & "${escList}" & "\\t" & (completed of r) & "\\t" & bd & "\\t" & nt & (ASCII character 30)
   end repeat
   return output
 end tell`;
@@ -149,7 +161,7 @@ tell application "Reminders"
       try
         if body of r is not missing value then set nt to (body of r)
       end try
-      set output to output & (id of r) & "\\t" & (name of r) & "\\t" & listName & "\\t" & (completed of r) & "\\t" & bd & "\\t" & nt & "\\n"
+      set output to output & (id of r) & "\\t" & (name of r) & "\\t" & listName & "\\t" & (completed of r) & "\\t" & bd & "\\t" & nt & (ASCII character 30)
     end repeat
   end repeat
   return output
