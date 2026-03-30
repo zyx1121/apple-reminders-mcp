@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { runAppleScript } from "../applescript.js";
+import { runAppleScript, escapeForAppleScript } from "../applescript.js";
 import { success, withErrorHandling } from "../helpers.js";
 
 export function registerListTools(server: McpServer) {
@@ -29,6 +29,44 @@ end tell`);
           return { name, total: Number(total), completed: Number(done), pending: Number(total) - Number(done) };
         });
       return success(lists);
+    }),
+  );
+
+  // Create list
+  server.registerTool(
+    "reminders_create_list",
+    {
+      description: "Create a new reminder list",
+      inputSchema: z.object({
+        name: z.string().describe("Name for the new list"),
+      }),
+    },
+    withErrorHandling(async ({ name }) => {
+      const esc = escapeForAppleScript(name);
+      await runAppleScript(`
+tell application "Reminders"
+  make new list with properties {name:"${esc}"}
+end tell`);
+      return success({ name, created: true });
+    }),
+  );
+
+  // Delete list
+  server.registerTool(
+    "reminders_delete_list",
+    {
+      description: "Delete a reminder list by name",
+      inputSchema: z.object({
+        name: z.string().describe("Name of the list to delete"),
+      }),
+    },
+    withErrorHandling(async ({ name }) => {
+      const esc = escapeForAppleScript(name);
+      await runAppleScript(`
+tell application "Reminders"
+  delete list "${esc}"
+end tell`);
+      return success({ name, deleted: true });
     }),
   );
 }

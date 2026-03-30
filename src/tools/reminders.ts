@@ -24,7 +24,7 @@ function parseReminders(raw: string) {
     .split(RS)
     .filter(Boolean)
     .map((line) => {
-      const [id, name, list, completed, dueDate, body] = line.split("\t");
+      const [id, name, list, completed, dueDate, pri, ...rest] = line.split("\t");
       if (!id?.startsWith("x-apple-reminder://")) return null;
       return {
         id,
@@ -32,7 +32,8 @@ function parseReminders(raw: string) {
         list,
         completed: completed === "true",
         dueDate: dueDate || null,
-        notes: body || null,
+        priority: Number(pri) || 0,
+        notes: rest.join("\t") || null,
       };
     })
     .filter(Boolean);
@@ -65,7 +66,7 @@ tell application "Reminders"
     try
       if body of r is not missing value then set nt to (body of r)
     end try
-    set output to output & (id of r) & "\\t" & (name of r) & "\\t" & "${esc}" & "\\t" & (completed of r) & "\\t" & bd & "\\t" & nt & (ASCII character 30)
+    set output to output & (id of r) & "\\t" & (name of r) & "\\t" & "${esc}" & "\\t" & (completed of r) & "\\t" & bd & "\\t" & (priority of r) & "\\t" & nt & (ASCII character 30)
   end repeat
   return output
 end tell`);
@@ -96,17 +97,17 @@ tell application "Reminders"
   try
     if body of r is not missing value then set nt to (body of r)
   end try
-  return (id of r) & "\\t" & (name of r) & "\\t" & (name of lst) & "\\t" & (completed of r) & "\\t" & bd & "\\t" & nt
+  return (id of r) & "\\t" & (name of r) & "\\t" & (name of lst) & "\\t" & (completed of r) & "\\t" & bd & "\\t" & (priority of r) & "\\t" & nt
 end tell`);
-      // reminders_get returns a single line; split into at most 6 parts so notes with tabs are preserved
       const parts = raw.split("\t");
-      const [rid, rname, rlist, rcompleted, rdueDate, ...rest] = parts;
+      const [rid, rname, rlist, rcompleted, rdueDate, rpriority, ...rest] = parts;
       return success({
         id: rid,
         name: rname,
         list: rlist,
         completed: rcompleted === "true",
         dueDate: rdueDate || null,
+        priority: Number(rpriority) || 0,
         notes: rest.join("\t") || null,
       });
     }),
@@ -142,7 +143,7 @@ tell application "Reminders"
     try
       if body of r is not missing value then set nt to (body of r)
     end try
-    set output to output & (id of r) & "\\t" & (name of r) & "\\t" & "${escList}" & "\\t" & (completed of r) & "\\t" & bd & "\\t" & nt & (ASCII character 30)
+    set output to output & (id of r) & "\\t" & (name of r) & "\\t" & "${escList}" & "\\t" & (completed of r) & "\\t" & bd & "\\t" & (priority of r) & "\\t" & nt & (ASCII character 30)
   end repeat
   return output
 end tell`;
@@ -161,7 +162,7 @@ tell application "Reminders"
       try
         if body of r is not missing value then set nt to (body of r)
       end try
-      set output to output & (id of r) & "\\t" & (name of r) & "\\t" & listName & "\\t" & (completed of r) & "\\t" & bd & "\\t" & nt & (ASCII character 30)
+      set output to output & (id of r) & "\\t" & (name of r) & "\\t" & listName & "\\t" & (completed of r) & "\\t" & bd & "\\t" & (priority of r) & "\\t" & nt & (ASCII character 30)
     end repeat
   end repeat
   return output
@@ -182,25 +183,27 @@ end tell`;
         list: z.string().describe("List name to add reminder to"),
         notes: z.string().optional().describe("Notes/body"),
         due_date: z.string().optional().describe("Due date ISO 8601, e.g. '2026-03-28' or '2026-03-28T09:00:00'"),
+        priority: z.number().optional().describe("Priority: 0=none (default), 1=high, 5=medium, 9=low"),
       }),
     },
-    withErrorHandling(async ({ name, list, notes, due_date }) => {
+    withErrorHandling(async ({ name, list, notes, due_date, priority }) => {
       const escName = escapeForAppleScript(name);
       const escList = escapeForAppleScript(list);
       const escNotes = notes ? escapeForAppleScript(notes) : "";
       const dateSetup = due_date ? asDateVar("dueDate", due_date) : "";
       const dateArg = due_date ? ", due date:dueDate" : "";
       const notesArg = notes ? `, body:"${escNotes}"` : "";
+      const priorityArg = priority !== undefined ? `, priority:${priority}` : "";
       const raw = await runAppleScript(`
 tell application "Reminders"
   set lst to list "${escList}"
   ${dateSetup}
-  set r to make new reminder at end of lst with properties {name:"${escName}"${notesArg}${dateArg}}
+  set r to make new reminder at end of lst with properties {name:"${escName}"${notesArg}${dateArg}${priorityArg}}
   set bd to ""
   try
     if due date of r is not missing value then set bd to (due date of r as string)
   end try
-  return (id of r) & "\\t" & (name of r) & "\\t" & "${escList}" & "\\t" & (completed of r) & "\\t" & bd & "\\t" & "${escNotes}"
+  return (id of r) & "\\t" & (name of r) & "\\t" & "${escList}" & "\\t" & (completed of r) & "\\t" & bd & "\\t" & (priority of r) & "\\t" & "${escNotes}"
 end tell`);
       const items = parseReminders(raw);
       if (!items.length) return error("Failed to create reminder");
@@ -218,15 +221,17 @@ end tell`);
         name: z.string().optional().describe("New title"),
         notes: z.string().optional().describe("New notes"),
         due_date: z.string().optional().describe("New due date ISO 8601"),
+        priority: z.number().optional().describe("Priority: 0=none, 1=high, 5=medium, 9=low"),
       }),
     },
-    withErrorHandling(async ({ id, name, notes, due_date }) => {
+    withErrorHandling(async ({ id, name, notes, due_date, priority }) => {
       const esc = escapeForAppleScript(id);
       const updates: string[] = [];
       if (name) updates.push(`set name of r to "${escapeForAppleScript(name)}"`);
       if (notes !== undefined) updates.push(`set body of r to "${escapeForAppleScript(notes)}"`);
       const dateSetup = due_date ? asDateVar("newDue", due_date) : "";
       if (due_date) updates.push("set due date of r to newDue");
+      if (priority !== undefined) updates.push(`set priority of r to ${priority}`);
       if (!updates.length && !due_date) return error("No fields to update");
       await runAppleScript(`
 tell application "Reminders"
