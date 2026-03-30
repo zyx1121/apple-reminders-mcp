@@ -1,46 +1,70 @@
-# @zyx1121/apple-mail-mcp
+# @zyx1121/apple-reminders-mcp
 
-MCP server for Apple Mail — read, search, and manage emails via Claude Code.
+MCP server for Apple Reminders — create, search, and manage reminders and lists via Claude Code.
 
 ## Install
 
 ```bash
-claude mcp add apple-mail -- npx @zyx1121/apple-mail-mcp
+claude mcp add apple-reminders -- npx @zyx1121/apple-reminders-mcp
 ```
 
 ## Prerequisites
 
-- macOS with Apple Mail configured
+- macOS with Reminders.app configured
 - Node.js >= 18
 - First run will prompt for Automation permission (System Settings > Privacy & Security > Automation)
 
 ## Tools
 
+### Lists
+
 | Tool | Description |
 |------|-------------|
-| `mail_get_accounts` | List all accounts and their mailboxes |
-| `mail_count_unread` | Count unread messages per account/mailbox |
-| `mail_list_messages` | List messages with filters (account, mailbox, date range, unread) |
-| `mail_read_message` | Read full content of a message by ID |
-| `mail_search` | Search by subject, sender, or both |
-| `mail_mark_read` | Mark a message as read |
+| `reminders_get_lists` | List all reminder lists |
+| `reminders_create_list` | Create a new reminder list |
+| `reminders_delete_list` | Delete a reminder list by name |
+
+### Reminders
+
+| Tool | Description |
+|------|-------------|
+| `reminders_list` | List reminders in a list |
+| `reminders_get` | Get full details of a reminder by ID |
+| `reminders_search` | Search reminders by keyword across all lists |
+| `reminders_create` | Create a new reminder (with optional priority) |
+| `reminders_update` | Update an existing reminder |
+| `reminders_complete` | Mark a reminder as complete or incomplete |
+| `reminders_delete` | Delete a reminder |
+
+### Priority
+
+`reminders_create` and `reminders_update` accept a `priority` parameter:
+
+| Value | Meaning |
+|-------|---------|
+| `0` | None (default) |
+| `1` | High |
+| `5` | Medium |
+| `9` | Low |
+
+Priority is returned by `reminders_list`, `reminders_get`, and `reminders_search`.
 
 ## Examples
 
 ```
-"List my mail accounts"         → mail_get_accounts
-"Show unread count"             → mail_count_unread
-"Yesterday's emails"            → mail_list_messages { date_from: "2026-03-26" }
-"Search for GitHub emails"      → mail_search { query: "GitHub" }
-"Read message 12345"            → mail_read_message { message_id: 12345 }
+"Show my lists"                  → reminders_get_lists
+"Create a list"                  → reminders_create_list { name: "Shopping" }
+"Add a reminder"                 → reminders_create { list: "Shopping", name: "Buy milk", priority: 1 }
+"List reminders"                 → reminders_list { list: "Shopping" }
+"Mark as done"                   → reminders_complete { id: "x-apple-reminder://..." }
+"Search for task"                → reminders_search { query: "milk" }
+"Delete a list"                  → reminders_delete_list { name: "Shopping" }
 ```
 
 ## Limitations
 
 - macOS only (uses AppleScript via `osascript`)
-- Subject search is case-sensitive (AppleScript limitation)
-- Sender/body search fetches recent messages and filters in JS (last 30 days, max 500)
-- Mail.app must be running
+- Reminders.app must be running
 
 ## License
 
